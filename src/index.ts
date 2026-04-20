@@ -4,6 +4,7 @@ import cors from 'cors';
 
 import busRouter from './routes/bus';
 import notifyRouter from './routes/notify';
+import stopsRouter from './routes/stops';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3000);
@@ -20,6 +21,7 @@ app.get('/health', (_req, res) => {
 // ── API 라우터 ────────────────────────────────────────────────────
 app.use('/api/bus', busRouter);
 app.use('/api/notify', notifyRouter);
+app.use('/api/stops', stopsRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────
 app.use((_req, res) => {
