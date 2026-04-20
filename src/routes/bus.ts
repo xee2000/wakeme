@@ -43,6 +43,24 @@ router.get('/stops', async (req: Request, res: Response) => {
   await proxyGet(res, 'getBusStopList', { routeNo });
 });
 
+/** 정류장 이름 검색 */
+router.get('/search', async (req: Request, res: Response) => {
+  const { name } = req.query as Record<string, string>;
+  if (!name) { res.status(400).json({ error: 'name 필수' }); return; }
+  await proxyGet(res, 'getNodeList', { nodeName: name, numOfRows: '30' });
+});
+
+/** GPS 좌표 기반 근처 정류장 조회 */
+router.get('/nearby', async (req: Request, res: Response) => {
+  const { lat, lng } = req.query as Record<string, string>;
+  if (!lat || !lng) { res.status(400).json({ error: 'lat, lng 필수' }); return; }
+  await proxyGet(res, 'getCrdntPrxmtSttnList', {
+    gpsLati: lat,
+    gpsLong: lng,
+    numOfRows: '20',
+  });
+});
+
 /** 정류장 ID로 도착 예정 버스 조회 */
 router.get('/arriving', async (req: Request, res: Response) => {
   const { nodeId } = req.query as Record<string, string>;
