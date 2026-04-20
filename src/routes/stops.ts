@@ -5,12 +5,14 @@
  * GET /api/stops/search?name=중앙시장            이름 검색 (부분 일치)
  * GET /api/stops/nearby?lat=36.35&lng=127.38     GPS 기반 근처 정류장 (기본 반경 500m)
  * GET /api/stops/:stopId/routes                  정류장에 경유하는 노선 목록
+ * GET /api/stops/cache/stats                     캐시 상태 확인 (디버그)
  */
 
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
+import { getRoutesByNodeIds, isCacheReady, getCacheStats } from '../lib/routeCache';
 
 const router = Router();
 
@@ -48,6 +50,11 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number):
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+// ── 캐시 상태 확인 (디버그) ───────────────────────────────────────────
+router.get('/cache/stats', (_req: Request, res: Response) => {
+  res.json({ success: true, data: getCacheStats() });
+});
+
 // ── 정류장 이름 검색 ──────────────────────────────────────────────
 router.get('/search', (req: Request, res: Response) => {
   const { name } = req.query as Record<string, string>;
@@ -78,13 +85,23 @@ router.get('/nearby', (req: Request, res: Response) => {
 
 // ── 정류장 경유 노선 목록 ─────────────────────────────────────────
 router.get('/:stopId/routes', async (req: Request, res: Response) => {
-  const { stopId } = req.params;
+  const stopId = req.params.stopId as string;
   const stop = STOPS_MAP.get(stopId);
 
   if (!stop) { res.status(404).json({ error: '정류장을 찾을 수 없습니다.' }); return; }
 
-  // 국토부 코드(nodeid)로 공공 API 호출 — getSttnAcctoRouteList
-  const tryNodeIds = [stop.nationalCode, stop.settlementCode, stop.id];
+  // ── 1순위: routeCache (busRouteInfo API 사전 캐시) ────────────────
+  if (isCacheReady()) {
+    const nodeIds = [stop.nationalCode, stop.settlementCode, stop.id].filter(Boolean);
+    const routes = getRoutesByNodeIds(nodeIds);
+    if (routes.length > 0) {
+      res.json({ success: true, stopName: stop.name, source: 'cache', data: routes });
+      return;
+    }
+  }
+
+  // ── 2순위: busposinfo getSttnAcctoRouteList 직접 호출 ────────────
+  const tryNodeIds = [stop.nationalCode, stop.settlementCode, stop.id].filter(Boolean);
 
   for (const nodeId of tryNodeIds) {
     try {
@@ -109,7 +126,7 @@ router.get('/:stopId/routes', async (req: Request, res: Response) => {
       }));
 
       if (routes.length > 0) {
-        res.json({ success: true, stopName: stop.name, nodeIdUsed: nodeId, data: routes });
+        res.json({ success: true, stopName: stop.name, source: 'realtime', nodeIdUsed: nodeId, data: routes });
         return;
       }
     } catch (_) {
@@ -117,7 +134,7 @@ router.get('/:stopId/routes', async (req: Request, res: Response) => {
     }
   }
 
-  // API 실패 시 도착 예정 정보로 폴백 (현재 운행 중인 버스만 표시)
+  // ── 3순위: 도착 예정 정보 폴백 (현재 운행 중인 버스만) ────────────
   try {
     const params = new URLSearchParams({
       serviceKey: SERVICE_KEY,
@@ -138,7 +155,7 @@ router.get('/:stopId/routes', async (req: Request, res: Response) => {
         endStop: '',
         arrivalMin: r.arrprevstationcnt ?? null,
       }));
-      res.json({ success: true, stopName: stop.name, realtime: true, data: routes });
+      res.json({ success: true, stopName: stop.name, source: 'arrival', data: routes });
       return;
     }
   } catch (_) {}
