@@ -1,11 +1,6 @@
 import { Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '../lib/supabase';
 import { AuthRequest } from '../types';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
 
 /**
  * Supabase JWT 검증 미들웨어
@@ -23,7 +18,7 @@ export async function authMiddleware(
   }
 
   const token = authHeader.split(' ')[1];
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await getSupabaseAdmin().auth.getUser(token);
 
   if (error || !data.user) {
     res.status(401).json({ error: '유효하지 않은 토큰입니다.' });

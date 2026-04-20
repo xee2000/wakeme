@@ -1,27 +1,24 @@
 /**
  * FCM 푸시 알림 라우터 (Firebase Admin SDK)
  *
+ * POST /api/notify/token     FCM 토큰 등록/갱신
  * POST /api/notify/prepare   하차 준비 알림 (300m)
  * POST /api/notify/exit      하차 알림 (150m)
- * POST /api/notify/token     FCM 토큰 등록/갱신
  */
 
 import { Router, Response } from 'express';
 import admin from 'firebase-admin';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 
 const router = Router();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+// ── Firebase Admin 지연 초기화 ────────────────────────────────────
+function getFirebaseApp(): admin.app.App {
+  if (admin.apps.length) return admin.apps[0]!;
 
-// ── FCM 앱 초기화 (최초 1회) ──────────────────────────────────────
-if (!admin.apps.length) {
-  admin.initializeApp({
+  return admin.initializeApp({
     credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -32,7 +29,7 @@ if (!admin.apps.length) {
 
 // ── 유틸 ─────────────────────────────────────────────────────────
 async function getFcmToken(userId: string): Promise<string | null> {
-  const { data } = await supabase
+  const { data } = await getSupabaseAdmin()
     .from('users')
     .select('fcm_token')
     .eq('id', userId)
@@ -41,10 +38,14 @@ async function getFcmToken(userId: string): Promise<string | null> {
 }
 
 async function sendFcm(token: string, title: string, body: string): Promise<void> {
-  await admin.messaging().send({
+  const app = getFirebaseApp();
+  await admin.messaging(app).send({
     token,
     notification: { title, body },
-    android: { priority: 'high', notification: { sound: 'default', channelId: 'wakeme-alert' } },
+    android: {
+      priority: 'high',
+      notification: { sound: 'default', channelId: 'wakeme-alert' },
+    },
     apns: { payload: { aps: { sound: 'default', badge: 1 } } },
   });
 }
@@ -56,7 +57,7 @@ router.post('/token', authMiddleware, async (req: AuthRequest, res: Response) =>
   const { fcmToken } = req.body as { fcmToken: string };
   if (!fcmToken) { res.status(400).json({ error: 'fcmToken 필수' }); return; }
 
-  const { error } = await supabase
+  const { error } = await getSupabaseAdmin()
     .from('users')
     .update({ fcm_token: fcmToken })
     .eq('id', req.userId!);
