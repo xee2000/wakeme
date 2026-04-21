@@ -5,22 +5,23 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "tsc && xcopy /E /I /Y src\\data dist\\data",
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "express": "^4.21.2",
+    "@supabase/supabase-js": "^2.49.4",
+    "axios": "^1.9.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "firebase-admin": "^13.3.0",
-    "@supabase/supabase-js": "^2.49.4",
-    "axios": "^1.9.0"
+    "express": "^4.21.2",
+    "fast-xml-parser": "^5.7.1",
+    "firebase-admin": "^13.3.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.1",
     "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
     "@types/node": "^22.15.3",
-    "typescript": "^5.8.3",
-    "ts-node-dev": "^2.0.0"
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
   }
 }

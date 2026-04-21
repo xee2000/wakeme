@@ -10,9 +10,12 @@
  */
 
 import axios from 'axios';
+import { XMLParser } from 'fast-xml-parser';
 
 const SERVICE_KEY = process.env.BUS_SERVICE_KEY!;
 const ROUTE_API_BASE = process.env.BUS_ROUTE_API_BASE ?? 'https://apis.data.go.kr/6300000/busRouteInfo';
+
+const xmlParser = new XMLParser({ ignoreAttributes: false });
 
 export interface RouteInfo {
   routeId: string;
@@ -35,28 +38,28 @@ let initPromise: Promise<void> | null = null;
 async function fetchAllPages<T>(endpoint: string, extraParams: Record<string, string> = {}): Promise<T[]> {
   const results: T[] = [];
   let page = 1;
-  const numOfRows = 1000;
 
   while (true) {
     const params = new URLSearchParams({
       serviceKey: SERVICE_KEY,
-      resultType: 'json',
-      numOfRows: String(numOfRows),
-      pageNo: String(page),
+      reqPage: String(page),
       ...extraParams,
     });
     const url = `${ROUTE_API_BASE}/${endpoint}?${params}`;
 
     try {
-      const { data } = await axios.get(url, { timeout: 15000 });
-      const items = data?.response?.body?.items?.item;
+      const { data } = await axios.get(url, { timeout: 30000, responseType: 'text' });
+      const parsed = xmlParser.parse(data);
+      const header = parsed?.ServiceResult?.msgHeader;
+      const items = parsed?.ServiceResult?.msgBody?.itemList;
       if (!items) break;
 
       const arr: T[] = Array.isArray(items) ? items : [items];
       results.push(...arr);
 
-      const totalCount: number = data?.response?.body?.totalCount ?? 0;
-      if (results.length >= totalCount || arr.length < numOfRows) break;
+      const totalPages: number = header?.itemPageCnt ?? 1;
+      console.log(`[routeCache] ${endpoint} ${page}/${totalPages} 페이지 완료 (누적 ${results.length}건)`);
+      if (page >= totalPages) break;
       page++;
     } catch (err) {
       console.error(`[routeCache] ${endpoint} page ${page} 오류:`, err);
@@ -72,30 +75,45 @@ async function _init(): Promise<void> {
   console.log('[routeCache] 노선 캐시 초기화 시작…');
 
   try {
-    // 1) 전체 노선 기본 정보
+    const ROUTE_TYPE_LABEL: Record<string, string> = {
+      '1': '급행버스', '2': '간선버스', '3': '지선버스', '4': '마을버스', '5': '외곽버스',
+    };
+
+    // 1) 전체 노선 기본 정보 (start/end는 nodeId 임시 저장)
     const routeItems = await fetchAllPages<any>('getRouteInfoAll');
     routeMap = new Map<string, RouteInfo>();
+    const startNodeMap = new Map<string, string>(); // routeId → startNodeId
+    const endNodeMap = new Map<string, string>();   // routeId → endNodeId
 
     for (const r of routeItems) {
+      const routeId = String(r.ROUTE_CD ?? '');
+      const tp = String(r.ROUTE_TP ?? '').trim();
       const info: RouteInfo = {
-        routeId: r.routeid ?? '',
-        routeNo: r.routeno ?? '',
-        routeType: r.routetp ?? '',
-        startStop: r.startnodenm ?? '',
-        endStop: r.endnodenm ?? '',
+        routeId,
+        routeNo: String(r.ROUTE_NO ?? ''),
+        routeType: ROUTE_TYPE_LABEL[tp] ?? tp,
+        startStop: '',
+        endStop: '',
       };
-      if (info.routeId) routeMap.set(info.routeId, info);
+      if (routeId) {
+        routeMap.set(routeId, info);
+        startNodeMap.set(routeId, String(r.START_NODE_ID ?? ''));
+        endNodeMap.set(routeId, String(r.END_NODE_ID ?? ''));
+      }
     }
 
     console.log(`[routeCache] 노선 ${routeMap.size}개 로드 완료`);
 
-    // 2) 전체 노선별 정류장 목록
+    // 2) 전체 노선별 정류장 목록 + nodeId→name 맵 구축
     const stationItems = await fetchAllPages<any>('getStaionByRouteAll');
     stopRoutesMap = new Map<string, RouteInfo[]>();
+    const nodeNameMap = new Map<string, string>(); // nodeId → stopName
 
     for (const s of stationItems) {
-      const nodeId: string = s.nodeid ?? '';
-      const routeId: string = s.routeid ?? '';
+      const nodeId: string = String(s.BUS_NODE_ID ?? '');
+      const routeId: string = String(s.ROUTE_CD ?? '');
+      const stopName: string = String(s.BUSSTOP_NM ?? '');
+      if (nodeId && stopName) nodeNameMap.set(nodeId, stopName);
       if (!nodeId || !routeId) continue;
 
       const routeInfo = routeMap.get(routeId);
@@ -104,11 +122,16 @@ async function _init(): Promise<void> {
       if (!stopRoutesMap.has(nodeId)) {
         stopRoutesMap.set(nodeId, []);
       }
-      // 중복 방지
       const list = stopRoutesMap.get(nodeId)!;
       if (!list.some(r => r.routeId === routeId)) {
         list.push(routeInfo);
       }
+    }
+
+    // start/end 이름 채우기
+    for (const [routeId, info] of routeMap) {
+      info.startStop = nodeNameMap.get(startNodeMap.get(routeId) ?? '') ?? '';
+      info.endStop   = nodeNameMap.get(endNodeMap.get(routeId) ?? '') ?? '';
     }
 
     console.log(`[routeCache] 정류장-노선 매핑 ${stopRoutesMap.size}개 정류장 완료`);
