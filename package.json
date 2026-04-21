@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc && xcopy /E /I /Y src\\data dist\\data",
+    "build": "tsc && node -e \"require('fs').cpSync('src/data','dist/data',{recursive:true})\"",
     "start": "node dist/index.js"
   },
   "dependencies": {
