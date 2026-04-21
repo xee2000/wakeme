@@ -7,6 +7,7 @@ import cors from 'cors';
 import busRouter from './routes/bus';
 import notifyRouter from './routes/notify';
 import stopsRouter from './routes/stops';
+import subwayRouter from './routes/subway';
 import { initRouteCache } from './lib/routeCache';
 
 const app = express();
@@ -25,6 +26,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/bus', busRouter);
 app.use('/api/notify', notifyRouter);
 app.use('/api/stops', stopsRouter);
+app.use('/api/subway', subwayRouter);
 
 // ── 404 ──────────────────────────────────────────────────────────
 app.use((_req, res) => {
