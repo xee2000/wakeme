@@ -9,6 +9,7 @@
 
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
+import { getStopsByRouteNo, isCacheReady } from '../lib/routeCache';
 
 const router = Router();
 
@@ -36,11 +37,21 @@ async function proxyGet(res: Response, endpoint: string, params: Record<string, 
   }
 }
 
-/** 노선번호로 정류장 목록 조회 */
+/** 노선번호로 정류장 목록 조회 (routeCache 사용) */
 router.get('/stops', async (req: Request, res: Response) => {
   const { routeNo } = req.query as Record<string, string>;
   if (!routeNo) { res.status(400).json({ error: 'routeNo 필수' }); return; }
-  await proxyGet(res, 'getBusStopList', { routeNo });
+
+  if (isCacheReady()) {
+    const stops = getStopsByRouteNo(routeNo.trim());
+    if (stops.length > 0) {
+      res.json({ success: true, data: stops });
+      return;
+    }
+  }
+
+  // 캐시 미준비 or 노선 없음: 빈 배열 반환
+  res.json({ success: true, data: [], message: '노선 캐시에서 정류장을 찾을 수 없습니다.' });
 });
 
 /** 정류장 이름 검색 */
