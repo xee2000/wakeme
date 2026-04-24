@@ -10,6 +10,7 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getStopsByRouteNo, isCacheReady } from '../lib/routeCache';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -26,13 +27,16 @@ function buildUrl(endpoint: string, params: Record<string, string>): string {
 }
 
 async function proxyGet(res: Response, endpoint: string, params: Record<string, string>) {
+  const t0 = Date.now();
   try {
     const url = buildUrl(endpoint, params);
     const { data } = await axios.get(url, { timeout: 8000 });
     const items = data?.response?.body?.items?.item ?? [];
+    const count = Array.isArray(items) ? items.length : 1;
+    logger.info('BUS_API', `${endpoint} 성공 (${Date.now() - t0}ms, ${count}건)`, params);
     res.json({ success: true, data: Array.isArray(items) ? items : [items] });
   } catch (err: any) {
-    console.error(`[bus] ${endpoint} error:`, err.message);
+    logger.error('BUS_API', `${endpoint} 실패 (${Date.now() - t0}ms): ${err.message}`, params);
     res.status(502).json({ success: false, error: '버스 API 호출 실패' });
   }
 }
@@ -45,12 +49,15 @@ router.get('/stops', async (req: Request, res: Response) => {
   if (isCacheReady()) {
     const stops = getStopsByRouteNo(routeNo.trim());
     if (stops.length > 0) {
+      logger.info('BUS_API', `stops 캐시 히트: routeNo=${routeNo} (${stops.length}개 정류장)`);
       res.json({ success: true, data: stops });
       return;
     }
+    logger.warn('BUS_API', `stops 캐시 미스: routeNo=${routeNo} — 노선 없음`);
+  } else {
+    logger.warn('BUS_API', `stops 요청 — 캐시 미준비: routeNo=${routeNo}`);
   }
 
-  // 캐시 미준비 or 노선 없음: 빈 배열 반환
   res.json({ success: true, data: [], message: '노선 캐시에서 정류장을 찾을 수 없습니다.' });
 });
 
