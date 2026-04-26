@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc && node -e \"require('fs').cpSync('src/data','dist/data',{recursive:true})\"",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "seed": "ts-node scripts/seed_static_data.ts",
+    "seed:bus": "ts-node scripts/seed_static_data.ts bus",
+    "seed:subway": "ts-node scripts/seed_static_data.ts subway"
   },
   "dependencies": {
     "@sentry/node": "^10.50.0",

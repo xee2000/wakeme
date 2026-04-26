@@ -213,6 +213,16 @@ export function getStopsByRouteNo(routeNo: string): StopInfo[] {
   return routeStopsMap.get(routeIds[0]) ?? [];
 }
 
+/** 노선번호로 routeId 배열 반환 */
+export function getRouteIdsByBusNo(busNo: string): string[] {
+  return routeNoToIdMap.get(busNo) ?? [];
+}
+
+/** routeId로 정류장 목록 반환 */
+export function getStopsByRouteId(routeId: string): StopInfo[] {
+  return routeStopsMap.get(routeId) ?? [];
+}
+
 /** 디버그: 캐시 통계 */
 export function getCacheStats() {
   return {
