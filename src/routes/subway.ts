@@ -12,6 +12,7 @@ import fs from 'fs';
 const router = Router();
 
 interface SubwayStation {
+  stationId: string;
   line: string;
   seq: number;
   name: string;
