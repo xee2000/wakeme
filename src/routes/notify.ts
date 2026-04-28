@@ -91,6 +91,28 @@ router.post('/token', authMiddleware, async (req: AuthRequest, res: Response) =>
 });
 
 /**
+ * 앱 생존 확인 heartbeat (10분 워치독 주기, 인증 불필요)
+ * body: { userId, routeId, departTime, gpsEnabled }
+ */
+router.post('/heartbeat', async (req: Request, res: Response) => {
+  const { userId, routeId, departTime, gpsEnabled } = req.body as {
+    userId:     string;
+    routeId:    string;
+    departTime: string;
+    gpsEnabled: boolean;
+  };
+
+  logger.info('HEARTBEAT', '앱 생존 확인', {
+    userId,
+    routeId,
+    departTime,
+    gpsStatus: gpsEnabled ? '✅ GPS 켜짐' : '❌ GPS 꺼짐',
+  });
+
+  res.json({ success: true, serverTime: new Date().toISOString() });
+});
+
+/**
  * 경로 모니터링 시작 로그 (인증 불필요 — 로그 전용)
  * body: { userId, routeName, busNos, endStopName, departTime }
  */
