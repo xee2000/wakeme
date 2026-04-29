@@ -91,6 +91,39 @@ router.post('/token', authMiddleware, async (req: AuthRequest, res: Response) =>
 });
 
 /**
+ * GPS 폴링 위치 로그 (15초마다, 인증 불필요)
+ * body: { userId, lat, lng, accuracy, waypoints: [{name, type, distanceM, inWindow, notified}] }
+ */
+router.post('/gps-poll', async (req: Request, res: Response) => {
+  const { userId, lat, lng, accuracy, waypoints } = req.body as {
+    userId:    string;
+    lat:       number;
+    lng:       number;
+    accuracy:  number;
+    waypoints: Array<{
+      name:      string;
+      type:      string;
+      distanceM: number;
+      inWindow:  boolean;
+      notified:  boolean;
+    }>;
+  };
+
+  const wpSummary = (waypoints ?? [])
+    .map(w => `${w.name}(${w.distanceM}m${w.notified ? ' ✅알림완료' : w.inWindow ? '' : ' ⏰시간창밖'})`)
+    .join(' | ');
+
+  logger.info('GPS_POLL', `📍 위치 폴링`, {
+    userId,
+    coords:   `${lat?.toFixed(5)}, ${lng?.toFixed(5)}`,
+    accuracy: `${Math.round(accuracy ?? 0)}m`,
+    waypoints: wpSummary,
+  });
+
+  res.json({ success: true });
+});
+
+/**
  * 앱 생존 확인 heartbeat (10분 워치독 주기, 인증 불필요)
  * body: { userId, routeId, departTime, gpsEnabled }
  */
