@@ -174,6 +174,21 @@ router.post('/start', async (req: Request, res: Response) => {
   res.json({ success: true, minutesLeft: remaining });
 });
 
+/**
+ * 앱/서비스 종료 로그 (인증 불필요 — 로그 전용)
+ * body: { userId, routeId, reason }
+ */
+router.post('/shutdown', async (req: Request, res: Response) => {
+  const { userId, routeId, reason } = req.body as {
+    userId:  string;
+    routeId: string;
+    reason:  string;
+  };
+
+  logger.warn('SHUTDOWN', '서비스 종료 감지', { userId, routeId, reason });
+  res.json({ success: true });
+});
+
 /** 하차 준비 알림 (300m 이내) */
 router.post('/prepare', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { stopName } = req.body as { stopName: string };
